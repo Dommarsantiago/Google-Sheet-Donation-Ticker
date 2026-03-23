@@ -1,0 +1,26 @@
+{
+  "sheetUrl": "https://docs.google.com/spreadsheets/d/1bu5sRZdfu-kR3bMF6XQwCPUaUSwRkyVkamLvF1Sser0/export?format=csv&gid=0",
+  "rotationSeconds": 15,
+  "teamColumnName": "Team E-W",
+  "neutral": {
+    "color": "#5b5f67",
+    "logoUrl": ""
+  },
+  "teams": [
+    {
+      "name": "Go East!",
+      "color": "#ea2a2a",
+      "logoUrl": ""
+    },
+    {
+      "name": "Go West!",
+      "color": "#00a803",
+      "logoUrl": ""
+    }
+  ],
+  "fontSize": 24,
+  "tickerHeight": 48,
+  "textColor": "#ffffff",
+  "messageScrollDelaySeconds": 3,
+  "messageScrollDurationSeconds": 10
+}

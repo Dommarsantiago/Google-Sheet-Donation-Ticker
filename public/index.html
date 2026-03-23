@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Donation Ticker – Control</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 1.5rem; }
+    h1 { font-size: 1.25rem; margin-bottom: 1rem; }
+    label { display: block; margin-top: 0.75rem; font-weight: 500; }
+    input[type="url"], input[type="number"], input[type="text"], input[type="color"] { width: 100%; padding: 0.5rem; margin-top: 0.25rem; }
+    input[type="number"] { max-width: 6rem; }
+    fieldset { margin-top: 1.5rem; padding: 1rem; border: 1px solid #ccc; border-radius: 6px; }
+    legend { font-weight: 600; padding: 0 0.5rem; }
+    .row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+    .row input[type="text"], .row input[type="url"] { flex: 1; }
+    .row input[type="color"] { width: 2.5rem; height: 2rem; padding: 2px; }
+    button { margin-top: 1rem; padding: 0.5rem 1rem; cursor: pointer; }
+    button.secondary { margin-left: 0.5rem; }
+    .teams-list { margin-top: 0.5rem; }
+    .team-item { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+    .team-item input[type="text"] { width: 8rem; }
+    .team-item input[type="color"] { width: 4rem; }
+    .status { margin-top: 1rem; color: #059669; }
+    .status.err { color: #dc2626; }
+  </style>
+</head>
+<body>
+  <h1>Donation Ticker – Control</h1>
+
+  <form id="form">
+    <label>Google Sheet URL (public “Anyone with link” or CSV export)</label>
+    <input type="url" name="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0" />
+
+    <label>Team column name (e.g. “Team E-W”)</label>
+    <input type="text" name="teamColumnName" value="Team E-W" />
+
+    <label>Rotation time (seconds)</label>
+    <input type="number" name="rotationSeconds" min="1" value="5" />
+
+    <label>Message scroll delay (seconds before long messages start scrolling)</label>
+    <input type="number" name="messageScrollDelaySeconds" min="0" value="5" />
+
+    <label>Message scroll duration (seconds to scroll from start to end)</label>
+    <input type="number" name="messageScrollDurationSeconds" min="1" value="20" />
+
+    <fieldset>
+      <legend>Neutral / No team</legend>
+      <label>Color (when team cell is empty)</label>
+      <div class="row">
+        <input type="color" name="neutralColor" value="#6b7280" />
+        <input type="text" name="neutralColorHex" value="#6b7280" placeholder="#hex" />
+      </div>
+      <label>Logo URL</label>
+      <input type="url" name="neutralLogoUrl" placeholder="https://..." />
+    </fieldset>
+
+    <fieldset>
+      <legend>Teams (name + color)</legend>
+      <div id="teamsList" class="teams-list"></div>
+      <button type="button" id="addTeam">Add team</button>
+    </fieldset>
+
+    <label>Font size (px)</label>
+    <input type="number" name="fontSize" min="10" max="72" value="14" />
+
+    <label>Ticker height (px)</label>
+    <input type="number" name="tickerHeight" min="24" max="200" value="48" />
+
+    <label>Text color</label>
+    <div class="row">
+      <input type="color" name="textColor" value="#ffffff" />
+      <input type="text" name="textColorHex" value="#ffffff" placeholder="#hex" />
+    </div>
+
+    <button type="submit">Save settings</button>
+    <a href="/ticker" target="_blank" rel="noopener"><button type="button" class="secondary">Open ticker</button></a>
+    <a href="/ticker?test=1" target="_blank" rel="noopener"><button type="button" class="secondary">Preview with test data</button></a>
+  </form>
+
+  <p id="status" class="status" aria-live="polite"></p>
+
+  <script>
+    const form = document.getElementById('form');
+    const statusEl = document.getElementById('status');
+    const teamsList = document.getElementById('teamsList');
+    const addTeamBtn = document.getElementById('addTeam');
+
+    function showStatus(msg, isErr) {
+      statusEl.textContent = msg;
+      statusEl.classList.toggle('err', !!isErr);
+    }
+
+    function syncColorInput(colorInput, hexInput) {
+      colorInput.addEventListener('input', () => { hexInput.value = colorInput.value; });
+      hexInput.addEventListener('input', (e) => {
+        if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) colorInput.value = e.target.value;
+      });
+    }
+    syncColorInput(form.neutralColor, form.neutralColorHex);
+    syncColorInput(form.textColor, form.textColorHex);
+
+    function teamRow(team = { name: '', color: '#6b7280' }) {
+      const div = document.createElement('div');
+      div.className = 'team-item';
+      div.innerHTML = `
+        <input type="text" placeholder="Team name" value="${escapeAttr(team.name)}" />
+        <input type="color" value="${team.color}" title="Color" />
+        <button type="button" class="remove-team">Remove</button>
+      `;
+      div.querySelector('.remove-team').addEventListener('click', () => div.remove());
+      return div;
+    }
+    function escapeAttr(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    addTeamBtn.addEventListener('click', () => teamsList.appendChild(teamRow()));
+
+    function loadConfig() {
+      fetch('/api/config')
+        .then((r) => r.json())
+        .then((c) => {
+          form.sheetUrl.value = c.sheetUrl || '';
+          form.teamColumnName.value = c.teamColumnName || 'Team E-W';
+          form.rotationSeconds.value = c.rotationSeconds ?? 5;
+          form.messageScrollDelaySeconds.value = c.messageScrollDelaySeconds ?? 5;
+          form.messageScrollDurationSeconds.value = c.messageScrollDurationSeconds ?? 20;
+          form.neutralColor.value = (c.neutral && c.neutral.color) || '#6b7280';
+          form.neutralColorHex.value = (c.neutral && c.neutral.color) || '#6b7280';
+          form.neutralLogoUrl.value = (c.neutral && c.neutral.logoUrl) || '';
+          form.fontSize.value = c.fontSize ?? 14;
+          form.tickerHeight.value = c.tickerHeight ?? 48;
+          form.textColor.value = c.textColor || '#ffffff';
+          form.textColorHex.value = c.textColor || '#ffffff';
+          teamsList.innerHTML = '';
+          (c.teams || []).forEach((t) => teamsList.appendChild(teamRow(t)));
+          if (teamsList.children.length === 0) teamsList.appendChild(teamRow());
+        })
+        .catch(() => showStatus('Failed to load config', true));
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const teams = [];
+      teamsList.querySelectorAll('.team-item').forEach((row) => {
+        const name = row.querySelector('input[type="text"]').value.trim();
+        const color = row.querySelector('input[type="color"]').value;
+        if (name) teams.push({ name, color, logoUrl: '' });
+      });
+      const body = {
+        sheetUrl: form.sheetUrl.value.trim(),
+        teamColumnName: form.teamColumnName.value.trim() || 'Team E-W',
+        rotationSeconds: Math.max(1, Number(form.rotationSeconds.value) || 5),
+        messageScrollDelaySeconds: Math.max(0, Number(form.messageScrollDelaySeconds.value) || 5),
+        messageScrollDurationSeconds: Math.max(1, Number(form.messageScrollDurationSeconds.value) || 20),
+        neutral: {
+          color: form.neutralColorHex.value.trim() || form.neutralColor.value,
+          logoUrl: form.neutralLogoUrl.value.trim(),
+        },
+        teams,
+        fontSize: Number(form.fontSize.value) || 14,
+        tickerHeight: Number(form.tickerHeight.value) || 48,
+        textColor: form.textColorHex.value.trim() || form.textColor.value,
+      };
+      fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+        .then((r) => r.json())
+        .then(() => showStatus('Settings saved.'))
+        .catch(() => showStatus('Failed to save', true));
+    });
+
+    loadConfig();
+  </script>
+</body>
+</html>

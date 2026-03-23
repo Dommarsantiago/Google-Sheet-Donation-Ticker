@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Broadcast Donation Ticker</title>
+    <style>
+        /* Transparent body for broadcast software */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: transparent;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        /* Ticker Background Bar */
+        .ticker-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 72px;
+            background-color: rgba(26, 26, 26, 0.85);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            transition: background-color 0.5s ease;
+        }
+
+        /* Logo column */
+        .ticker-logo {
+            flex-shrink: 0;
+            height: 56px;
+            width: 88px;
+            margin-left: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ticker-logo img {
+            max-height: 56px;
+            max-width: 80px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+
+        /* CSS Grid for Defined Columns */
+        .ticker-row {
+            display: grid;
+            grid-template-columns: 340px 220px 120px 1fr;
+            gap: 20px;
+            flex: 1;
+            padding: 0 40px 0 10px;
+            box-sizing: border-box;
+            opacity: 0;
+            transform: translateY(100%);
+            animation: slideIn 0.5s forwards;
+        }
+
+        /* Column Typography */
+        .col-name, .col-team, .col-amount {
+            border-right: 1px solid rgba(255, 255, 255, 0.45);
+            padding-right: 16px;
+        }
+        .col-name { font-weight: bold; color: #ffffff; font-size: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .col-team { color: #ffffff; font-size: 26px; text-align: center; }
+        .col-amount { color: #f4d03f; font-weight: bold; font-size: 28px; text-align: center; }
+        .col-message {
+            font-style: italic; color: #ecf0f1; font-size: 28px; padding-left: 4px;
+            overflow: hidden;
+            min-width: 0;
+        }
+        .message-marquee {
+            display: inline-block;
+            white-space: nowrap;
+        }
+        .message-marquee.message-marquee--scroll {
+            animation: scroll-message-once var(--scroll-duration, 20s) linear 1 forwards;
+            animation-delay: var(--scroll-delay, 5s);
+        }
+        .col-message .message-text { padding-right: 0.5em; }
+        @keyframes scroll-message-once {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(var(--scroll-end, 0)); }
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes slideOut {
+            from { transform: translateY(0); opacity: 1; }
+            to { transform: translateY(-100%); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ticker-container" id="ticker-container">
+        <div class="ticker-logo" id="ticker-logo"></div>
+        <div id="ticker-content" class="ticker-row">
+            <div class="col-name" id="t-name">Name</div>
+            <div class="col-team" id="t-team">Team</div>
+            <div class="col-amount" id="t-amount">$0</div>
+            <div class="col-message" id="t-message"><div class="message-marquee"><span class="message-text">Message</span></div></div>
+        </div>
+    </div>
+
+    <script>
+        var config = null;
+        var rows = [];
+        var currentIndex = 0;
+        var intervalId = null;
+        var rowElement = document.getElementById('ticker-content');
+        var containerEl = document.getElementById('ticker-container');
+        var logoEl = document.getElementById('ticker-logo');
+
+        function getTeamStyle(teamValue) {
+            var key = (teamValue || '').trim();
+            if (!key) return { color: (config.neutral && config.neutral.color) || '#6b7280' };
+            var team = (config.teams || []).find(function(t) { return t.name === key; });
+            if (team) return { color: team.color };
+            return { color: (config.neutral && config.neutral.color) || '#6b7280' };
+        }
+
+        function findColumnKey(header, hints) {
+            if (!header || !header.length) return null;
+            var lower = header.map(function(h) { return (h || '').toLowerCase(); });
+            for (var i = 0; i < hints.length; i++) {
+                var hint = hints[i].toLowerCase();
+                for (var j = 0; j < lower.length; j++) {
+                    if (lower[j].indexOf(hint) !== -1 || hint.indexOf(lower[j]) !== -1) return header[j];
+                }
+            }
+            return null;
+        }
+
+        function getHeaderKeyIgnoreCase(header, wanted) {
+            if (!header || !wanted) return wanted;
+            var w = String(wanted).trim().toLowerCase();
+            for (var i = 0; i < header.length; i++) {
+                if ((header[i] || '').trim().toLowerCase() === w) return header[i];
+            }
+            return wanted;
+        }
+
+        function getDisplayData(row) {
+            var header = config.lastHeader || [];
+            var teamCol = config.teamColumnName || 'Team E-W';
+            var teamColKey = getHeaderKeyIgnoreCase(header, teamCol);
+            var nameKey = findColumnKey(header, ['name', 'NAME']) || header[0];
+            var amountKey = findColumnKey(header, ['amount', 'AMOUNT']) || header[1];
+            var messageKey = findColumnKey(header, ['message', 'MESSAGE']) || header[3];
+            var teamVal = row[teamColKey] != null ? String(row[teamColKey]).trim() : '';
+            var teamLabel = teamVal;
+            var found = null;
+            if (teamVal && config.teams && config.teams.length) {
+                var t = config.teams.find(function(x) { return x.name === teamVal; });
+                if (t) { teamLabel = t.name; found = t.name; }
+            }
+            // #region agent log
+            fetch('http://127.0.0.1:7331/ingest/93eba17d-2236-4524-9e7e-152d1b4c486f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b69aec'},body:JSON.stringify({sessionId:'b69aec',location:'ticker.html:getDisplayData',message:'Team display resolution',data:{teamCol:teamCol,teamVal:teamVal,headerKeys:header,rowTeamKey:Object.keys(row).filter(function(k){return (k||'').toLowerCase().indexOf('team')!==-1;}),configTeamNames:config.teams?config.teams.map(function(x){return x.name;}):[],found:found,teamLabel:teamLabel},timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
+            // #endregion
+            return {
+                name: (row[nameKey] != null ? String(row[nameKey]).trim() : '') || '—',
+                team: teamLabel || '—',
+                amount: (row[amountKey] != null ? String(row[amountKey]).trim() : '') || '—',
+                message: (row[messageKey] != null ? String(row[messageKey]).trim() : '') || '—'
+            };
+        }
+
+        function updateDOM(data, style) {
+            // #region agent log
+            fetch('http://127.0.0.1:7331/ingest/93eba17d-2236-4524-9e7e-152d1b4c486f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b69aec'},body:JSON.stringify({sessionId:'b69aec',location:'ticker.html:updateDOM',message:'DOM update team value',data:{dataTeam:data.team},timestamp:Date.now(),hypothesisId:'H4'})}).catch(function(){});
+            // #endregion
+            document.getElementById('t-name').innerText = data.name;
+            document.getElementById('t-team').innerText = data.team;
+            document.getElementById('t-amount').innerText = data.amount;
+            var msgEl = document.getElementById('t-message');
+            msgEl.innerHTML = '';
+            var marquee = document.createElement('div');
+            marquee.className = 'message-marquee';
+            var span = document.createElement('span');
+            span.className = 'message-text';
+            span.textContent = data.message;
+            marquee.appendChild(span);
+            msgEl.appendChild(marquee);
+            var delaySec = Math.max(0, Number(config.messageScrollDelaySeconds) || 5);
+            var durationSec = Math.max(1, Number(config.messageScrollDurationSeconds) || 20);
+            marquee.style.setProperty('--scroll-delay', delaySec + 's');
+            marquee.style.setProperty('--scroll-duration', durationSec + 's');
+            requestAnimationFrame(function() {
+                requestAnimationFrame(function() {
+                    var sw = marquee.scrollWidth;
+                    var cw = msgEl.clientWidth;
+                    var overflowColumn = sw > cw;
+                    var scrollEnd = overflowColumn ? -(sw - cw) : 0;
+                    if (overflowColumn) {
+                        marquee.style.setProperty('--scroll-end', scrollEnd + 'px');
+                        marquee.classList.add('message-marquee--scroll');
+                    } else {
+                        marquee.classList.remove('message-marquee--scroll');
+                    }
+                    // #region agent log
+                    fetch('http://127.0.0.1:7331/ingest/93eba17d-2236-4524-9e7e-152d1b4c486f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b69aec'},body:JSON.stringify({sessionId:'b69aec',location:'ticker.html:messageScroll',message:'Message scroll decision',data:{scrollWidth:sw,msgColumnWidth:cw,overflowColumn:overflowColumn,scrollClassAdded:overflowColumn,scrollEndPx:scrollEnd,messageLen:(data.message||'').length},timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
+                    // #endregion
+                });
+            });
+            if (style && style.color) {
+                var rgb = style.color.replace('#', '');
+                if (rgb.length === 6) {
+                    var r = parseInt(rgb.slice(0,2), 16);
+                    var g = parseInt(rgb.slice(2,4), 16);
+                    var b = parseInt(rgb.slice(4,6), 16);
+                    containerEl.style.backgroundColor = 'rgba(' + r + ',' + g + ',' + b + ',0.85)';
+                } else {
+                    containerEl.style.backgroundColor = style.color;
+                }
+            } else {
+                containerEl.style.backgroundColor = 'rgba(26, 26, 26, 0.85)';
+            }
+            logoEl.innerHTML = '';
+            var logoUrl = config.neutral && config.neutral.logoUrl;
+            if (logoUrl) {
+                var img = document.createElement('img');
+                img.src = logoUrl;
+                img.alt = '';
+                logoEl.appendChild(img);
+            }
+        }
+
+        function cycleDonation() {
+            if (!config || !rows.length) return;
+            rowElement.style.animation = 'slideOut 0.5s forwards';
+            setTimeout(function() {
+                currentIndex = (currentIndex + 1) % rows.length;
+                var row = rows[currentIndex];
+                var teamCol = config.teamColumnName || 'Team E-W';
+                var teamColKey = getHeaderKeyIgnoreCase(config.lastHeader || [], teamCol);
+                var teamValue = row[teamColKey];
+                var style = getTeamStyle(teamValue);
+                var data = getDisplayData(row);
+                updateDOM(data, style);
+                rowElement.style.animation = 'none';
+                rowElement.offsetHeight;
+                rowElement.style.animation = 'slideIn 0.5s forwards';
+            }, 500);
+        }
+
+        function showFirstRow() {
+            if (!config || !rows.length) return;
+            var row = rows[currentIndex];
+            var teamCol = config.teamColumnName || 'Team E-W';
+            var teamColKey = getHeaderKeyIgnoreCase(config.lastHeader || [], teamCol);
+            var teamValue = row[teamColKey];
+            var style = getTeamStyle(teamValue);
+            var data = getDisplayData(row);
+            updateDOM(data, style);
+        }
+
+        function useTestData() { return /[?&]test=1/.test(window.location.search); }
+
+        function load() {
+            fetch('/api/config').then(function(r) { return r.json(); }).then(function(c) {
+                config = c || {};
+                config.lastHeader = config.lastHeader || [];
+                config.teamColumnName = config.teamColumnName || 'Team E-W';
+                config.neutral = config.neutral || { color: '#6b7280', logoUrl: '' };
+                config.teams = config.teams || [];
+                config.rotationSeconds = Math.max(1, config.rotationSeconds || 5);
+                var sheetUrl = useTestData() ? null : (config.sheetUrl && config.sheetUrl.trim());
+                if (!sheetUrl && !useTestData()) {
+                    containerEl.style.display = 'none';
+                    return;
+                }
+                var sheetPromise = useTestData()
+                    ? fetch('/api/sheet/test').then(function(r) { return r.json(); })
+                    : fetch('/api/sheet?url=' + encodeURIComponent(sheetUrl)).then(function(sheetRes) {
+                        if (!sheetRes.ok) return null;
+                        return sheetRes.json();
+                    });
+                return sheetPromise;
+            }).then(function(data) {
+                if (!data || !data.rows || data.rows.length === 0) {
+                    containerEl.style.display = 'none';
+                    return;
+                }
+                config.lastHeader = data.header || [];
+                rows = data.rows.filter(function(r) {
+                    var h = config.lastHeader || [];
+                    var nameKey = findColumnKey(h, ['name', 'NAME']) || h[0];
+                    return nameKey && r[nameKey] != null && String(r[nameKey]).trim();
+                });
+                if (rows.length === 0) rows = data.rows;
+                currentIndex = 0;
+                if (intervalId) clearInterval(intervalId);
+                containerEl.style.display = 'flex';
+                showFirstRow();
+                intervalId = setInterval(cycleDonation, config.rotationSeconds * 1000);
+            }).catch(function() { containerEl.style.display = 'none'; });
+        }
+
+        load();
+        setInterval(load, 60000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "donation-ticker",
+  "version": "1.0.0",
+  "description": "HTML graphics server for donation ticker from Google Sheet",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "csv-parse": "^5.5.2",
+    "express": "^4.18.2"
+  }
+}
