@@ -30,7 +30,13 @@
   <h1>Donation Ticker – Control</h1>
 
   <form id="form">
-    <label>Google Sheet URL (public “Anyone with link” or CSV export)</label>
+    <label>Spreadsheet ID (from the URL: <code>…/d/<strong>THIS_PART</strong>/…</code>)</label>
+    <input type="text" name="sheetId" placeholder="e.g. 1abc…xyz" autocomplete="off" spellcheck="false" />
+
+    <label>Tab ID (<code>gid</code> — use <code>0</code> for the first tab, or copy from the sheet URL <code>#gid=</code>)</label>
+    <input type="number" name="sheetGid" min="0" step="1" value="0" />
+
+    <label>Paste full Google Sheet link (optional — fills ID and tab above when you leave this field)</label>
     <input type="url" name="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0" />
 
     <label>Team column name (e.g. “Team E-W”)</label>
@@ -101,6 +107,35 @@
     syncColorInput(form.neutralColor, form.neutralColorHex);
     syncColorInput(form.textColor, form.textColorHex);
 
+    function parseSheetLink(input) {
+      const raw = String(input || '').trim();
+      if (!raw) return null;
+      try {
+        const u = new URL(raw);
+        if (u.hostname !== 'docs.google.com' || !raw.includes('/spreadsheets/')) return null;
+        const m = raw.match(/\/spreadsheets\/d\/([^/]+)/);
+        if (!m) return null;
+        let gid = '0';
+        const q = u.searchParams.get('gid');
+        if (q && /^\d+$/.test(q)) gid = q;
+        else {
+          const hm = u.hash.match(/[#&]gid=(\d+)/);
+          if (hm) gid = hm[1];
+        }
+        return { id: m[1], gid };
+      } catch {
+        return null;
+      }
+    }
+
+    form.sheetUrl.addEventListener('blur', () => {
+      const ref = parseSheetLink(form.sheetUrl.value);
+      if (ref) {
+        form.sheetId.value = ref.id;
+        form.sheetGid.value = ref.gid;
+      }
+    });
+
     function teamRow(team = { name: '', color: '#6b7280' }) {
       const div = document.createElement('div');
       div.className = 'team-item';
@@ -127,6 +162,8 @@
       fetch('/api/config')
         .then((r) => r.json())
         .then((c) => {
+          form.sheetId.value = (c.sheetId && String(c.sheetId).trim()) || '';
+          form.sheetGid.value = c.sheetGid != null && String(c.sheetGid).trim() !== '' ? c.sheetGid : '0';
           form.sheetUrl.value = c.sheetUrl || '';
           form.teamColumnName.value = c.teamColumnName || 'Team E-W';
           form.rotationSeconds.value = c.rotationSeconds ?? 5;
@@ -155,6 +192,8 @@
         if (name) teams.push({ name, color, logoUrl: '' });
       });
       const body = {
+        sheetId: form.sheetId.value.trim(),
+        sheetGid: String(Math.max(0, Math.floor(Number(form.sheetGid.value) || 0))),
         sheetUrl: form.sheetUrl.value.trim(),
         teamColumnName: form.teamColumnName.value.trim() || 'Team E-W',
         rotationSeconds: Math.max(1, Number(form.rotationSeconds.value) || 5),

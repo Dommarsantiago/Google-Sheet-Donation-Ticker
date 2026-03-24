@@ -273,14 +273,19 @@
                 config.neutral = config.neutral || { color: '#6b7280', logoUrl: '' };
                 config.teams = config.teams || [];
                 config.rotationSeconds = Math.max(1, config.rotationSeconds || 5);
-                var sheetUrl = useTestData() ? null : (config.sheetUrl && config.sheetUrl.trim());
-                if (!sheetUrl && !useTestData()) {
+                var sheetId = !useTestData() && config.sheetId && String(config.sheetId).trim();
+                var sheetGid = (config.sheetGid != null && String(config.sheetGid).trim() !== '') ? String(config.sheetGid).trim() : '0';
+                var sheetUrl = !useTestData() && !sheetId && config.sheetUrl && config.sheetUrl.trim();
+                if (!sheetId && !sheetUrl && !useTestData()) {
                     containerEl.style.display = 'none';
                     return;
                 }
                 var sheetPromise = useTestData()
                     ? fetch('/api/sheet/test').then(function(r) { return r.json(); })
-                    : fetch('/api/sheet?url=' + encodeURIComponent(sheetUrl)).then(function(sheetRes) {
+                    : (sheetId
+                        ? fetch('/api/sheet?id=' + encodeURIComponent(sheetId) + '&gid=' + encodeURIComponent(sheetGid))
+                        : fetch('/api/sheet?url=' + encodeURIComponent(sheetUrl)))
+                        .then(function(sheetRes) {
                         if (!sheetRes.ok) return null;
                         return sheetRes.json();
                     });

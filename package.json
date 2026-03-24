@@ -3,11 +3,25 @@
   "version": "1.0.0",
   "description": "HTML graphics server for donation ticker from Google Sheet",
   "main": "server.js",
+  "bin": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build:exe": "pkg package.json --compress Brotli"
   },
   "dependencies": {
     "csv-parse": "^5.5.2",
     "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.14.1"
+  },
+  "pkg": {
+    "assets": [
+      "public/**/*"
+    ],
+    "targets": [
+      "node20-win-x64"
+    ],
+    "outputPath": "dist"
   }
 }
