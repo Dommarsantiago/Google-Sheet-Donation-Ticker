@@ -89,3 +89,10 @@ pm2 startup
 ```
 
 Follow the command PM2 prints to enable startup.
+
+
+Images
+<img width="1470" height="804" alt="Screenshot 2026-03-24 at 11 00 41 AM" src="https://github.com/user-attachments/assets/ec505704-87da-4e46-9a2a-87cbe49b5df5" />
+<img width="1470" height="804" alt="Screenshot 2026-03-24 at 10 59 32 AM" src="https://github.com/user-attachments/assets/c641c720-da3c-4a0c-9dfc-e15fdb190733" />
+<img width="1470" height="805" alt="Screenshot 2026-03-24 at 10 59 18 AM" src="https://github.com/user-attachments/assets/ec8f8321-6095-4b40-a042-667b709057d9" />
+
