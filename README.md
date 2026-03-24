@@ -12,25 +12,6 @@ Add a donation ticker to any broadcast by connecting a simple Google Sheets docu
 
 The sheet must be shared so anyone with the link can view it (or use a published CSV export URL). Settings are stored in `config.json` next to `server.js` when you run from source, or **next to `donation-ticker.exe`** when you use the packaged build below.
 
-## Windows executable (.exe)
-
-You can ship a single executable so **Node.js does not need to be installed** on the machine that runs the ticker.
-
-1. On a Windows PC with Node.js installed, clone this repo and run:
-
-   ```text
-   npm install
-   npm run build:exe
-   ```
-
-2. The build writes **`dist/donation-ticker.exe`** (64-bit). Copy that file to any folder you want (for example `C:\Program Files\DonationTicker\`).
-
-3. Double-click the `.exe` or register it for startup (next section). The control panel is [http://localhost:3000/](http://localhost:3000/) (or the next free port if 3000 is busy).
-
-4. **`config.json`** is read and written in **the same folder as the `.exe`**. You can copy an existing `config.json` beside the exe, or open the web UI once and use **Save settings** to create it.
-
-To rebuild after code changes, run `npm run build:exe` again. The packager may show a warning about `csv-parse/sync` during the build; the resulting `.exe` still runs correctly.
-
 ## Run at startup (Windows)
 
 Windows needs a wrapper (service, scheduled task, or PM2) to start the app automatically. Use either **Node + `server.js`** (from [Run locally](#run-locally)) or **`donation-ticker.exe`** ([Windows executable](#windows-executable-exe)) as the program.
